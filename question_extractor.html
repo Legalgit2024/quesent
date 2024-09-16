@@ -1,0 +1,267 @@
+<html><head><base href="/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enhanced Question Extractor App</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f0f0f0;
+    }
+    .container {
+        display: flex;
+        gap: 20px;
+    }
+    .pdf-container, .preview-container {
+        flex: 1;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        height: 600px;
+        overflow-y: auto;
+    }
+    #pdf-viewer {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+    #question-list, #sentence-list {
+        list-style-type: none;
+        padding: 0;
+    }
+    #question-list li, #sentence-list li {
+        margin-bottom: 10px;
+        padding: 10px;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    #question-list li:hover, #sentence-list li:hover {
+        background-color: #e9e9e9;
+    }
+    .input-container {
+        margin-bottom: 20px;
+    }
+    button {
+        background-color: #4CAF50;
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+    #text-input, #word-search {
+        width: 100%;
+        height: 100px;
+        margin-bottom: 10px;
+    }
+    #word-search {
+        height: 30px;
+    }
+</style>
+</head>
+<body>
+    <div class="input-container">
+        <input type="file" id="pdf-upload" accept="application/pdf">
+        <button onclick="extractQuestions()">Extract Questions</button>
+    </div>
+    <div class="input-container">
+        <textarea id="text-input" placeholder="Or paste your text here"></textarea>
+        <button onclick="extractQuestionsFromText()">Extract Questions from Text</button>
+    </div>
+    <div class="input-container">
+        <input type="text" id="word-search" placeholder="Enter a word to search for sentences">
+        <button onclick="searchSentences()">Search Sentences</button>
+    </div>
+    <div class="container">
+        <div class="pdf-container">
+            <iframe id="pdf-viewer"></iframe>
+        </div>
+        <div class="preview-container">
+            <h2>Extracted Questions:</h2>
+            <ol id="question-list"></ol>
+            <h2>Sentences with Search Word:</h2>
+            <ol id="sentence-list"></ol>
+        </div>
+    </div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
+
+let extractedQuestions = [];
+let pdfContent = '';
+let pdf = null;
+
+document.getElementById('pdf-upload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file.type !== 'application/pdf') {
+        console.error('Not a PDF file!');
+        return;
+    }
+
+    const fileReader = new FileReader();
+    fileReader.onload = function() {
+        const typedarray = new Uint8Array(this.result);
+        const loadingTask = pdfjsLib.getDocument(typedarray);
+        loadingTask.promise.then(loadedPdf => {
+            pdf = loadedPdf;
+            document.getElementById('pdf-viewer').src = URL.createObjectURL(file);
+            extractTextFromPDF(pdf);
+        });
+    };
+    fileReader.readAsArrayBuffer(file);
+});
+
+function extractTextFromPDF(pdf) {
+    let textContent = '';
+    const numPages = pdf.numPages;
+    let pagesProcessed = 0;
+
+    for (let i = 1; i <= numPages; i++) {
+        pdf.getPage(i).then(page => {
+            page.getTextContent().then(content => {
+                textContent += content.items.map(item => item.str).join(' ');
+                pagesProcessed++;
+
+                if (pagesProcessed === numPages) {
+                    pdfContent = textContent;
+                }
+            });
+        });
+    }
+}
+
+function extractQuestions() {
+    if (!pdf) {
+        alert('Please upload a PDF file first.');
+        return;
+    }
+
+    processText(pdfContent);
+}
+
+function extractQuestionsFromText() {
+    const text = document.getElementById('text-input').value;
+    if (!text) {
+        alert('Please enter some text first.');
+        return;
+    }
+    processText(text);
+}
+
+function processText(text) {
+    const questionRegex = /[^.!?]+\?/g;
+    const questions = text.match(questionRegex) || [];
+    
+    extractedQuestions = questions.map((question, index) => ({
+        question: question.trim(),
+        timestamp: new Date().toISOString(),
+        index: index
+    }));
+
+    displayQuestions();
+    generateCSV();
+}
+
+function displayQuestions() {
+    const questionList = document.getElementById('question-list');
+    questionList.innerHTML = '';
+    extractedQuestions.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.textContent = item.question;
+        li.onclick = () => scrollToPDFPosition(item.index);
+        questionList.appendChild(li);
+    });
+}
+
+function scrollToPDFPosition(index) {
+    if (!pdf) {
+        alert('Please upload a PDF file first.');
+        return;
+    }
+
+    const viewer = document.getElementById('pdf-viewer');
+    const questionText = extractedQuestions[index].question;
+
+    pdf.getPage(1).then(page => {
+        const scale = 1;
+        const viewport = page.getViewport({ scale });
+
+        page.getTextContent().then(textContent => {
+            const textItems = textContent.items;
+            for (let i = 0; i < textItems.length; i++) {
+                if (textItems[i].str.includes(questionText.substring(0, 20))) {
+                    const item = textItems[i];
+                    const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
+                    viewer.contentWindow.scrollTo(0, y);
+                    break;
+                }
+            }
+        });
+    });
+}
+
+function generateCSV() {
+    const csvData = extractedQuestions.map(item => ({
+        Name: 'User',
+        Timestamp: item.timestamp,
+        Question: item.question
+    }));
+
+    const csv = Papa.unparse(csvData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'extracted_questions.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+function searchSentences() {
+    const searchWord = document.getElementById('word-search').value.toLowerCase();
+    if (!searchWord) {
+        alert('Please enter a word to search for.');
+        return;
+    }
+
+    const text = pdfContent || document.getElementById('text-input').value;
+    if (!text) {
+        alert('Please upload a PDF or enter some text first.');
+        return;
+    }
+
+    const sentenceRegex = /[^.!?]+[.!?]/g;
+    const sentences = text.match(sentenceRegex) || [];
+    const matchingSentences = sentences.filter(sentence => 
+        sentence.toLowerCase().includes(searchWord)
+    );
+
+    displaySentences(matchingSentences);
+}
+
+function displaySentences(sentences) {
+    const sentenceList = document.getElementById('sentence-list');
+    sentenceList.innerHTML = '';
+    sentences.forEach((sentence, index) => {
+        const li = document.createElement('li');
+        li.textContent = `${index + 1}.) ${sentence.trim()}`;
+        sentenceList.appendChild(li);
+    });
+}
+</script>
+</body>
+</html>
