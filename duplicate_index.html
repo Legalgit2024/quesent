@@ -1,0 +1,57 @@
+<html>
+<head>
+<base href="/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Index for Editing</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.24.0/axios.min.js"></script>
+<style>
+    /* Same styles as index.html */
+</style>
+</head>
+<body>
+    <!-- Same body content as index.html -->
+
+<script>
+document.addEventListener('DOMContentLoaded', (event) => {
+    // Load the original index.html content
+    axios.get('index.html').then(response => {
+        document.body.innerHTML = response.data;
+    });
+
+    // Function to handle changes and merge back to original index.html
+    function mergeChanges() {
+        const updatedContent = document.body.innerHTML;
+        axios.post('/merge-changes', { content: updatedContent })
+            .then(response => {
+                alert('Changes merged successfully!');
+            })
+            .catch(error => {
+                console.error('Error merging changes:', error);
+                alert('Failed to merge changes.');
+            });
+    }
+
+    // Add a button to merge changes
+    const mergeButton = document.createElement('button');
+    mergeButton.textContent = 'Merge Changes';
+    mergeButton.onclick = mergeChanges;
+    document.body.appendChild(mergeButton);
+});
+
+// Function to send direct requests to GPT for site editing
+function sendToGPT(request) {
+    axios.post('/gpt-edit', { request: request })
+        .then(response => {
+            document.body.innerHTML = response.data;
+        })
+        .catch(error => {
+            console.error('Error processing GPT request:', error);
+            alert('Failed to process GPT request.');
+        });
+}
+</script>
+</body>
+</html>
