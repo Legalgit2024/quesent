@@ -1,267 +1,327 @@
-<html><head><base href="/">
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Enhanced Question Extractor App</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 20px;
-        background-color: #f0f0f0;
-    }
-    .container {
-        display: flex;
-        gap: 20px;
-    }
-    .pdf-container, .preview-container {
-        flex: 1;
-        background-color: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        padding: 20px;
-        height: 600px;
-        overflow-y: auto;
-    }
-    #pdf-viewer {
-        width: 100%;
-        height: 100%;
-        border: none;
-    }
-    #question-list, #sentence-list {
-        list-style-type: none;
-        padding: 0;
-    }
-    #question-list li, #sentence-list li {
-        margin-bottom: 10px;
-        padding: 10px;
-        background-color: #f9f9f9;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-    #question-list li:hover, #sentence-list li:hover {
-        background-color: #e9e9e9;
-    }
-    .input-container {
-        margin-bottom: 20px;
-    }
-    button {
-        background-color: #4CAF50;
-        border: none;
-        color: white;
-        padding: 10px 20px;
-        text-align: center;
-        text-decoration: none;
-        display: inline-block;
-        font-size: 16px;
-        margin: 4px 2px;
-        cursor: pointer;
-        border-radius: 4px;
-    }
-    #text-input, #word-search {
-        width: 100%;
-        height: 100px;
-        margin-bottom: 10px;
-    }
-    #word-search {
-        height: 30px;
-    }
-</style>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GPT Code Editor Tester</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.1.2/dist/axios.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            margin: 0;
+            padding: 15px;
+            background: #f0f2f5;
+            line-height: 1.6;
+            font-size: 16px;
+        }
+
+        @media (min-width: 768px) {
+            body {
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+            }
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #1a1a1a;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .step {
+            background: white;
+            border-radius: 12px;
+            margin: 15px 0;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h3 {
+            font-size: 18px;
+            color: #333;
+            margin: 0 0 15px 0;
+        }
+
+        .code-segment {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .code-segment pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            display: none;
+            font-size: 14px;
+        }
+
+        button {
+            width: 100%;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 10px 0;
+            cursor: pointer;
+            touch-action: manipulation;
+            transition: background-color 0.2s;
+        }
+
+        button:active {
+            background: #3d8b40;
+        }
+
+        #finalStep {
+            margin-top: 25px;
+            padding: 20px;
+        }
+
+        #finalStep button {
+            background: #2196F3;
+        }
+
+        #finalStep button:active {
+            background: #1976D2;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            color: #666;
+        }
+
+        .step-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .step-number {
+            background: #e0e0e0;
+            color: #333;
+            width: 24px;
+            height: 24px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .completed {
+            background: #4CAF50;
+            color: white;
+        }
+    </style>
 </head>
 <body>
-    <div class="input-container">
-        <input type="file" id="pdf-upload" accept="application/pdf">
-        <button onclick="extractQuestions()">Extract Questions</button>
-    </div>
-    <div class="input-container">
-        <textarea id="text-input" placeholder="Or paste your text here"></textarea>
-        <button onclick="extractQuestionsFromText()">Extract Questions from Text</button>
-    </div>
-    <div class="input-container">
-        <input type="text" id="word-search" placeholder="Enter a word to search for sentences">
-        <button onclick="searchSentences()">Search Sentences</button>
-    </div>
-    <div class="container">
-        <div class="pdf-container">
-            <iframe id="pdf-viewer"></iframe>
+    <h1>Mobile GPT Code Editor</h1>
+
+    <div class="step" id="step1">
+        <div class="step-status">
+            <span class="step-number">1</span>
+            <span>Current Code Analysis</span>
         </div>
-        <div class="preview-container">
-            <h2>Extracted Questions:</h2>
-            <ol id="question-list"></ol>
-            <h2>Sentences with Search Word:</h2>
-            <ol id="sentence-list"></ol>
-        </div>
-    </div>
-
-<script>
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
-
-let extractedQuestions = [];
-let pdfContent = '';
-let pdf = null;
-
-document.getElementById('pdf-upload').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file.type !== 'application/pdf') {
-        console.error('Not a PDF file!');
-        return;
-    }
-
-    const fileReader = new FileReader();
-    fileReader.onload = function() {
-        const typedarray = new Uint8Array(this.result);
-        const loadingTask = pdfjsLib.getDocument(typedarray);
-        loadingTask.promise.then(loadedPdf => {
-            pdf = loadedPdf;
-            document.getElementById('pdf-viewer').src = URL.createObjectURL(file);
-            extractTextFromPDF(pdf);
-        });
-    };
-    fileReader.readAsArrayBuffer(file);
-});
-
-function extractTextFromPDF(pdf) {
-    let textContent = '';
-    const numPages = pdf.numPages;
-    let pagesProcessed = 0;
-
-    for (let i = 1; i <= numPages; i++) {
-        pdf.getPage(i).then(page => {
-            page.getTextContent().then(content => {
-                textContent += content.items.map(item => item.str).join(' ');
-                pagesProcessed++;
-
-                if (pagesProcessed === numPages) {
-                    pdfContent = textContent;
-                }
-            });
-        });
-    }
-}
-
-function extractQuestions() {
-    if (!pdf) {
-        alert('Please upload a PDF file first.');
-        return;
-    }
-
-    processText(pdfContent);
-}
-
-function extractQuestionsFromText() {
-    const text = document.getElementById('text-input').value;
-    if (!text) {
-        alert('Please enter some text first.');
-        return;
-    }
-    processText(text);
-}
-
-function processText(text) {
-    const questionRegex = /[^.!?]+\?/g;
-    const questions = text.match(questionRegex) || [];
+        <div class="code-segment">
+            <pre>
+function extractQuestions(pdfText) {
+    const questions = [];
+    const lines = pdfText.split('\n');
     
-    extractedQuestions = questions.map((question, index) => ({
-        question: question.trim(),
-        timestamp: new Date().toISOString(),
-        index: index
-    }));
-
-    displayQuestions();
-    generateCSV();
-}
-
-function displayQuestions() {
-    const questionList = document.getElementById('question-list');
-    questionList.innerHTML = '';
-    extractedQuestions.forEach((item, index) => {
-        const li = document.createElement('li');
-        li.textContent = item.question;
-        li.onclick = () => scrollToPDFPosition(item.index);
-        questionList.appendChild(li);
+    lines.forEach(line => {
+        if (line.includes('?')) {
+            questions.push(line.trim());
+        }
     });
-}
+    
+    return questions;
+}</pre>
+        </div>
+        <button onclick="processStep('step1')" aria-label="Analyze current code">
+            Analyze Code
+        </button>
+        <div class="loading" id="loading1">Processing...</div>
+        <div class="result" id="result1"></div>
+    </div>
 
-function scrollToPDFPosition(index) {
-    if (!pdf) {
-        alert('Please upload a PDF file first.');
-        return;
-    }
+    <div class="step" id="step2">
+        <div class="step-status">
+            <span class="step-number">2</span>
+            <span>Add Page Numbers</span>
+        </div>
+        <button onclick="processStep('step2')" aria-label="Add page number tracking">
+            Add Page Tracking
+        </button>
+        <div class="loading" id="loading2">Processing...</div>
+        <div class="result" id="result2"></div>
+    </div>
 
-    const viewer = document.getElementById('pdf-viewer');
-    const questionText = extractedQuestions[index].question;
+    <div class="step" id="step3">
+        <div class="step-status">
+            <span class="step-number">3</span>
+            <span>Code Optimization</span>
+        </div>
+        <button onclick="processStep('step3')" aria-label="Optimize code structure">
+            Optimize Code
+        </button>
+        <div class="loading" id="loading3">Processing...</div>
+        <div class="result" id="result3"></div>
+    </div>
 
-    pdf.getPage(1).then(page => {
-        const scale = 1;
-        const viewport = page.getViewport({ scale });
+    <div class="step" id="step4">
+        <div class="step-status">
+            <span class="step-number">4</span>
+            <span>Performance Check</span>
+        </div>
+        <button onclick="processStep('step4')" aria-label="Check code performance">
+            Check Performance
+        </button>
+        <div class="loading" id="loading4">Processing...</div>
+        <div class="result" id="result4"></div>
+    </div>
 
-        page.getTextContent().then(textContent => {
-            const textItems = textContent.items;
-            for (let i = 0; i < textItems.length; i++) {
-                if (textItems[i].str.includes(questionText.substring(0, 20))) {
-                    const item = textItems[i];
-                    const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
-                    viewer.contentWindow.scrollTo(0, y);
-                    break;
-                }
+    <div id="finalStep">
+        <button onclick="finishAndDeploy()" aria-label="Deploy changes to live site">
+            Deploy to Live Site
+        </button>
+    </div>
+
+    <script>
+        // Mock responses for demonstration
+        const mockResponses = {
+            step1: `Analysis complete:
+- Current code extracts questions but lacks page tracking
+- Simple implementation can be enhanced
+- Consider adding error handling`,
+            step2: `function extractQuestions(pdfText) {
+    const questions = [];
+    let currentPage = 1;
+    const lines = pdfText.split('\\n');
+    
+    lines.forEach(line => {
+        if (line.includes('Page')) {
+            const pageMatch = line.match(/Page\\s*(\\d+)/i);
+            if (pageMatch) {
+                currentPage = parseInt(pageMatch[1]);
             }
+        }
+        
+        if (line.includes('?')) {
+            questions.push({
+                question: line.trim(),
+                page: currentPage
+            });
+        }
+    });
+    
+    return questions;
+}`,
+            step3: `// Optimized and linted code
+function extractQuestions(pdfText) {
+    if (!pdfText) return [];
+    
+    const questions = [];
+    let currentPage = 1;
+    
+    pdfText.split('\\n').forEach(line => {
+        const pageMatch = line.match(/Page\\s*(\\d+)/i);
+        if (pageMatch) {
+            currentPage = parseInt(pageMatch[1], 10);
+            return;
+        }
+        
+        if (line.includes('?')) {
+            questions.push({
+                question: line.trim(),
+                page: currentPage
+            });
+        }
+    });
+    
+    return questions;
+}`,
+            step4: `Performance Analysis:
+- O(n) time complexity where n is number of lines
+- Efficient string operations
+- Memory usage optimized
+- Recommended for production use`
+        };
+
+        function showLoading(step) {
+            document.querySelector(`#loading${step}`).style.display = 'block';
+        }
+
+        function hideLoading(step) {
+            document.querySelector(`#loading${step}`).style.display = 'none';
+        }
+
+        function markStepComplete(step) {
+            const stepNumber = document.querySelector(`#step${step} .step-number`);
+            stepNumber.classList.add('completed');
+        }
+
+        function processStep(step) {
+            const stepNum = step.slice(-1);
+            showLoading(stepNum);
+
+            // Simulate processing delay
+            setTimeout(() => {
+                hideLoading(stepNum);
+                const resultDiv = document.querySelector(`#result${stepNum}`);
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<pre>${mockResponses[step]}</pre>`;
+                markStepComplete(stepNum);
+            }, 1000);
+        }
+
+        function finishAndDeploy() {
+            const allSteps = document.querySelectorAll('.step-number');
+            const allCompleted = Array.from(allSteps).every(step => step.classList.contains('completed'));
+            
+            if (!allCompleted) {
+                alert('Please complete all steps first');
+                return;
+            }
+
+            alert('Changes successfully deployed! The code now includes page number tracking.');
+        }
+
+        // Handle offline status
+        window.addEventListener('online', function() {
+            document.body.style.opacity = '1';
         });
-    });
-}
-
-function generateCSV() {
-    const csvData = extractedQuestions.map(item => ({
-        Name: 'User',
-        Timestamp: item.timestamp,
-        Question: item.question
-    }));
-
-    const csv = Papa.unparse(csvData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', 'extracted_questions.csv');
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-}
-
-function searchSentences() {
-    const searchWord = document.getElementById('word-search').value.toLowerCase();
-    if (!searchWord) {
-        alert('Please enter a word to search for.');
-        return;
-    }
-
-    const text = pdfContent || document.getElementById('text-input').value;
-    if (!text) {
-        alert('Please upload a PDF or enter some text first.');
-        return;
-    }
-
-    const sentenceRegex = /[^.!?]+[.!?]/g;
-    const sentences = text.match(sentenceRegex) || [];
-    const matchingSentences = sentences.filter(sentence => 
-        sentence.toLowerCase().includes(searchWord)
-    );
-
-    displaySentences(matchingSentences);
-}
-
-function displaySentences(sentences) {
-    const sentenceList = document.getElementById('sentence-list');
-    sentenceList.innerHTML = '';
-    sentences.forEach((sentence, index) => {
-        const li = document.createElement('li');
-        li.textContent = `${index + 1}.) ${sentence.trim()}`;
-        sentenceList.appendChild(li);
-    });
-}
-</script>
+        
+        window.addEventListener('offline', function() {
+            document.body.style.opacity = '0.7';
+            alert('You are offline. Please check your connection.');
+        });
+    </script>
 </body>
 </html>
